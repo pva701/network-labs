@@ -20,7 +20,7 @@ serveDNS = do
     fork dnsListeners
     own <- myHost
     sendMulticast $ encode $ DNSHello own
-    fork dnsPingWorker
+    dnsPingWorker
 
 dnsListeners :: forall m . MonadDNS m => m ()
 dnsListeners = do

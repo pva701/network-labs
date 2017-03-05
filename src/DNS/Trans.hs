@@ -1,11 +1,16 @@
 module DNS.Trans
        ( DNSHolder (..)
+       , runDNSHolder
        ) where
 
+import           Control.Concurrent.STM    (newTVar)
 import           Data.ByteString.Lazy      as BSL
+import           Network.Multicast         (multicastReceiver, multicastSender)
+import           Network.Socket            (HostName)
 import           Network.Socket.ByteString (recvFrom, sendTo)
 import           Universum
 
+import           Common                    (MonadThread)
 import           DNS.Types                 (DNSState (..), MonadDNS (..))
 
 newtype DNSHolder m a = DNSHolder
@@ -14,6 +19,7 @@ newtype DNSHolder m a = DNSHolder
                , Applicative
                , Monad
                , MonadIO
+               , MonadThread
                )
 
 instance MonadIO m => MonadDNS (DNSHolder m) where
@@ -28,3 +34,11 @@ instance MonadIO m => MonadDNS (DNSHolder m) where
     recvMulticast = DNSHolder $ do
         sock <- asks recvSocket
         liftIO (first BSL.fromStrict <$> recvFrom sock 1024) -- TODO length
+
+runDNSHolder :: MonadIO m => HostName -> String -> Word16 -> DNSHolder m a -> m a
+runDNSHolder host ip (fromIntegral -> port) holder = do
+    hosts1 <- atomically $ newTVar mempty
+    hosts2 <- atomically $ newTVar mempty
+    sender <- liftIO $ multicastSender ip port
+    recv <- liftIO $ multicastReceiver ip port
+    runReaderT (getDNSHolder holder) $ DNSState hosts1 hosts2 host sender recv
