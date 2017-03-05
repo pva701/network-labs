@@ -34,11 +34,14 @@ data DNSServReqMsg
 data DNSServRespMsg = DNSOlleh !HostMap
 
 data DNSClientReqMsg = DNSRequest !HostName
-data DNSClientRespMsg = DNSResponse !IP
+data DNSClientRespMsg = DNSResponseIP !IP | DNSResponseUnknown
 
 class MonadIO m => MonadDNS m where
+    myHost   :: m HostName
     askHosts :: m (TVar HostMap)
+
     sendMulticast :: ByteString -> m ()
+    sendDirectly  :: ByteString -> SockAddr -> m ()
     recvMulticast :: m (ByteString, SockAddr)
 
     default askHosts
