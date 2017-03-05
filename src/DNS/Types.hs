@@ -24,6 +24,7 @@ type HostMap = Map HostName IPv4
 
 data DNSState = DNSState
     { activeHosts :: !(TVar HostMap)
+    , pings       :: !(TVar HostMap)
     , ownHost     :: !HostName
     , sendSocket  :: !(Socket, SockAddr)
     , recvSocket  :: !Socket
@@ -80,15 +81,15 @@ instance Binary DNSClientRespMsg where
 
 class MonadIO m => MonadDNS m where
     myHost   :: m HostName
-    askHosts :: m (TVar HostMap)
+    askState :: m (TVar HostMap, TVar HostMap)
 
     sendMulticast :: ByteString -> m ()
     sendDirectly  :: ByteString -> SockAddr -> m ()
     recvMulticast :: m (ByteString, SockAddr)
 
-    default askHosts
-        :: (MonadTrans t, MonadDNS m', t m' ~ m) => m (TVar HostMap)
-    askHosts = lift askHosts
+    default askState
+        :: (MonadTrans t, MonadDNS m', t m' ~ m) => m (TVar HostMap, TVar HostMap)
+    askState = lift askState
 
     default sendMulticast
         :: (MonadTrans t, MonadDNS m', t m' ~ m) => ByteString -> m ()

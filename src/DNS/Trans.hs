@@ -18,7 +18,7 @@ newtype DNSHolder m a = DNSHolder
 
 instance MonadIO m => MonadDNS (DNSHolder m) where
     myHost = DNSHolder $ asks ownHost
-    askHosts = DNSHolder $ asks activeHosts
+    askState = DNSHolder $ asks (bimap activeHosts pings . join (,))
     sendMulticast (BSL.toStrict -> bytes) = DNSHolder $ do
         (sock, addr) <- asks sendSocket
         () <$ liftIO (sendTo sock bytes addr)

@@ -4,7 +4,7 @@ module DNS.Serve
        ( serveDNS
        ) where
 
-import           Control.Concurrent.STM (readTVar, writeTVar)
+import           Control.Concurrent.STM (modifyTVar', readTVar, writeTVar)
 import           Data.Binary            (encode)
 import qualified Data.Map.Strict        as M
 import           Network.Socket         (SockAddr (..), hostAddressToTuple)
@@ -20,7 +20,7 @@ serveDNS = do
     fork dnsListeners
     own <- myHost
     sendMulticast $ encode $ DNSHello own
-    fork dnsWorkers
+    fork dnsPingWorker
 
 dnsListeners :: forall m . MonadDNS m => m ()
 dnsListeners = do
@@ -39,7 +39,7 @@ dnsListeners = do
 
     reqServListeners :: DNSServReqMsg -> SockAddr -> m ()
     reqServListeners (DNSHello host) from = do
-        var <- askHosts
+        var <- fst <$> askState
         msg <- atomically $ do
             knownHosts <- readTVar var
             let ipv4 = addrToIPv4 from
@@ -48,24 +48,27 @@ dnsListeners = do
                    let res = M.insert host ipv4 knownHosts
                    DNSOlleh res <$ writeTVar var res
         sendDirectly (encode msg) from
-    reqServListeners (DNSPing host) from = notImplemented
+    reqServListeners (DNSPing host) from = do
+        var <- snd <$> askState
+        atomically $ modifyTVar' var $ M.insert host (addrToIPv4 from)
 
     reqCliListeners :: DNSClientReqMsg -> SockAddr -> m ()
     reqCliListeners (DNSRequest host) from = do
-        knownHosts <- atomically . readTVar =<< askHosts
+        knownHosts <- atomically . readTVar . fst =<< askState
         let msg = maybe DNSResponseUnknown DNSResponseIP (M.lookup host knownHosts)
         sendDirectly (encode msg) from
 
     respServListeners :: DNSServRespMsg -> m ()
     respServListeners (DNSOlleh newHosts) = do
-        var <- askHosts
+        var <- fst <$> askState
         knownHosts <- atomically $ readTVar var
         atomically $ writeTVar var $ M.union knownHosts newHosts
     respServListeners DNSWrongHost = notImplemented
 
-dnsWorkers :: (MonadThread m, MonadDNS m) => m ()
-dnsWorkers = do
+dnsPingWorker :: (MonadThread m, MonadDNS m) => m ()
+dnsPingWorker = forever $ do
     ownHost <- myHost
     sendMulticast $ encode $ DNSPing ownHost
     delay 50
-
+    (knownVar, pingsVar) <- askState
+    atomically $ readTVar pingsVar >>= writeTVar knownVar
