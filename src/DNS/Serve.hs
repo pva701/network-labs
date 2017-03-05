@@ -5,50 +5,67 @@ module DNS.Serve
        ) where
 
 import           Control.Concurrent.STM (readTVar, writeTVar)
-import qualified Data.HashMap.Strict    as HM
-import           Network.Socket         (SockAddr)
-import           Universum
+import           Data.Binary            (encode)
+import qualified Data.Map.Strict        as M
+import           Network.Socket         (SockAddr (..), hostAddressToTuple)
+import           Universum              hiding (ByteString)
 
-import           Common                 (MonadThread (..))
+import           Common                 (MonadThread (..), tryDecode)
 import           DNS.Types              (DNSClientReqMsg (..), DNSClientRespMsg (..),
-                                         DNSServReqMsg (..), DNSServRespMsg (..),
+                                         DNSServReqMsg (..), DNSServRespMsg (..), IPv4,
                                          MonadDNS (..))
 
 serveDNS :: (MonadThread m, MonadDNS m) => m ()
 serveDNS = do
     fork dnsListeners
+    own <- myHost
+    sendMulticast $ encode $ DNSHello own
     fork dnsWorkers
-    notImplemented -- send request
 
 dnsListeners :: forall m . MonadDNS m => m ()
 dnsListeners = do
-    --(bytes, _, addr) <- liftIO $ recvFrom sock 1024
-    let msg = notImplemented
-    notImplemented
+    (bytes, from) <- recvMulticast
+    let res1 = tryDecode @DNSServReqMsg bytes
+    let res2 = tryDecode @DNSClientReqMsg bytes
+    let res3 = tryDecode @DNSServRespMsg bytes
+    whenRight res1 $ flip reqServListeners from
+    whenRight res2 $ flip reqCliListeners from
+    whenRight res3 respServListeners
+    --when (isLeft res1 && isLeft res2 && isLeft res3) $ notImplemented
   where
-    reqListeners :: Either DNSServReqMsg DNSClientReqMsg -> SockAddr -> m ()
-    reqListeners (Left (DNSHello host)) from = do
+    addrToIPv4 :: SockAddr -> IPv4
+    addrToIPv4 (SockAddrInet _ ip) = hostAddressToTuple ip
+    addrToIPv4 _                   = notImplemented
+
+    reqServListeners :: DNSServReqMsg -> SockAddr -> m ()
+    reqServListeners (DNSHello host) from = do
+        var <- askHosts
+        msg <- atomically $ do
+            knownHosts <- readTVar var
+            let ipv4 = addrToIPv4 from
+            if | M.member host knownHosts -> pure DNSWrongHost
+               | otherwise -> do
+                   let res = M.insert host ipv4 knownHosts
+                   DNSOlleh res <$ writeTVar var res
+        sendDirectly (encode msg) from
+    reqServListeners (DNSPing host) from = notImplemented
+
+    reqCliListeners :: DNSClientReqMsg -> SockAddr -> m ()
+    reqCliListeners (DNSRequest host) from = do
         knownHosts <- atomically . readTVar =<< askHosts
-        let msg = DNSOlleh knownHosts
-        sendDirectly notImplemented from
+        let msg = maybe DNSResponseUnknown DNSResponseIP (M.lookup host knownHosts)
+        sendDirectly (encode msg) from
 
-    reqListeners (Left (DNSPing host)) from = notImplemented
-
-    reqListeners (Right (DNSRequest host)) from = do
-        knownHosts <- atomically . readTVar =<< askHosts
-        let msg = maybe DNSResponseUnknown DNSResponseIP (HM.lookup host knownHosts)
-        sendDirectly notImplemented from
-
-    respListeners :: DNSServRespMsg -> m ()
-    respListeners (DNSOlleh hm) = do
+    respServListeners :: DNSServRespMsg -> m ()
+    respServListeners (DNSOlleh newHosts) = do
         var <- askHosts
         knownHosts <- atomically $ readTVar var
-        atomically $ writeTVar var $ HM.union knownHosts hm
+        atomically $ writeTVar var $ M.union knownHosts newHosts
+    respServListeners DNSWrongHost = notImplemented
 
 dnsWorkers :: (MonadThread m, MonadDNS m) => m ()
 dnsWorkers = do
     ownHost <- myHost
-    let msg = DNSPing ownHost
-    sendMulticast notImplemented
+    sendMulticast $ encode $ DNSPing ownHost
     delay 50
 

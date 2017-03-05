@@ -2,7 +2,7 @@
 
 module DNS.Types
        ( DNSState (..)
-       , IP
+       , IPv4
 
        , DNSServReqMsg (..)
        , DNSServRespMsg (..)
@@ -14,15 +14,17 @@ module DNS.Types
 
 import           Control.Concurrent.STM (TVar)
 import           Control.Monad.Trans    (MonadTrans (lift))
-import           Data.ByteString        (ByteString)
+import           Data.Binary            (Binary (..), getWord8, putWord8)
+import           Data.ByteString.Lazy   (ByteString)
 import           Network.Socket         (HostName, SockAddr, Socket)
-import           Universum
+import           Universum              hiding (ByteString)
 
-type IP = String
-type HostMap = HashMap HostName IP
+type IPv4 = (Word8, Word8, Word8, Word8)
+type HostMap = Map HostName IPv4
 
 data DNSState = DNSState
     { activeHosts :: !(TVar HostMap)
+    , ownHost     :: !HostName
     , sendSocket  :: !(Socket, SockAddr)
     , recvSocket  :: !Socket
     }
@@ -30,11 +32,51 @@ data DNSState = DNSState
 data DNSServReqMsg
     = DNSHello !HostName
     | DNSPing !HostName
+    deriving (Generic)
 
-data DNSServRespMsg = DNSOlleh !HostMap
+data DNSServRespMsg
+    = DNSOlleh !HostMap
+    | DNSWrongHost
+    deriving (Generic)
 
 data DNSClientReqMsg = DNSRequest !HostName
-data DNSClientRespMsg = DNSResponseIP !IP | DNSResponseUnknown
+    deriving (Generic)
+data DNSClientRespMsg = DNSResponseIP !IPv4 | DNSResponseUnknown
+    deriving (Generic)
+
+instance Binary DNSServReqMsg where
+    put (DNSHello x) = putWord8 0 >> put x
+    put (DNSPing x)  = putWord8 1 >> put x
+    get = do
+        tag <- getWord8
+        if | tag == 0 -> DNSHello <$> get
+           | tag == 1 -> DNSPing <$> get
+           | otherwise -> fail "Unexpected tag"
+
+instance Binary DNSServRespMsg where
+    put (DNSOlleh x) = putWord8 2 >> put x
+    put DNSWrongHost = putWord8 6
+    get = do
+        tag <- getWord8
+        if | tag == 2 -> DNSOlleh <$> get
+           | tag == 6 -> pure DNSWrongHost
+           | otherwise -> fail "Unexpected tag"
+
+instance Binary DNSClientReqMsg where
+    put (DNSRequest x) = putWord8 3 >> put x
+    get = do
+        tag <- getWord8
+        if | tag == 3 -> DNSRequest <$> get
+           | otherwise -> fail "Unexpected tag"
+
+instance Binary DNSClientRespMsg where
+    put (DNSResponseIP x)  = putWord8 4 >> put x
+    put DNSResponseUnknown = putWord8 5
+    get = do
+        tag <- getWord8
+        if | tag == 4 -> DNSResponseIP <$> get
+           | tag == 5 -> pure DNSResponseUnknown
+           | otherwise -> fail "Unexpected tag"
 
 class MonadIO m => MonadDNS m where
     myHost   :: m HostName

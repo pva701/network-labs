@@ -2,6 +2,7 @@ module DNS.Trans
        ( DNSHolder (..)
        ) where
 
+import           Data.ByteString.Lazy      as BSL
 import           Network.Socket.ByteString (recvFrom, sendTo)
 import           Universum
 
@@ -16,10 +17,14 @@ newtype DNSHolder m a = DNSHolder
                )
 
 instance MonadIO m => MonadDNS (DNSHolder m) where
+    myHost = DNSHolder $ asks ownHost
     askHosts = DNSHolder $ asks activeHosts
-    sendMulticast bytes = DNSHolder $ do
+    sendMulticast (BSL.toStrict -> bytes) = DNSHolder $ do
         (sock, addr) <- asks sendSocket
+        () <$ liftIO (sendTo sock bytes addr)
+    sendDirectly (BSL.toStrict -> bytes) addr = DNSHolder $ do
+        (sock, _) <- asks sendSocket
         () <$ liftIO (sendTo sock bytes addr)
     recvMulticast = DNSHolder $ do
         sock <- asks recvSocket
-        liftIO $ recvFrom sock 1024 -- TODO length
+        liftIO (first BSL.fromStrict <$> recvFrom sock 1024) -- TODO length
