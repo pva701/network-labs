@@ -6,13 +6,14 @@ module DNS.Serve
 
 import           Universum
 
+import           Common    (MonadThread (..))
 import           DNS.Types (DNSClientReqMsg (..), DNSClientRespMsg (..),
                             DNSServReqMsg (..), DNSServRespMsg (..), MonadDNS (..))
 
-serveDNS :: MonadDNS m => m ()
+serveDNS :: (MonadThread m, MonadDNS m) => m ()
 serveDNS = do
-    -- liftIO $ forkIO dnsListeners
-    -- liftIO $ forkIO dnsWorkers
+    fork dnsListeners
+    fork dnsWorkers
     notImplemented -- send request
 
 dnsListeners :: MonadDNS m => m ()
@@ -22,16 +23,15 @@ dnsListeners = do
     notImplemented
   where
     reqListeners :: Either DNSServReqMsg DNSClientReqMsg -> m ()
-    reqListeners (Left (DNSHello host)) = notImplemented
-    reqListeners (Left (DNSPing host)) = notImplemented
+    reqListeners (Left (DNSHello host))    = notImplemented
+    reqListeners (Left (DNSPing host))     = notImplemented
     reqListeners (Right (DNSRequest host)) = notImplemented
 
     respListeners :: DNSServRespMsg -> m ()
     respListeners (DNSOlleh hm) = notImplemented
 
-dnsWorkers :: MonadDNS m => m ()
+dnsWorkers :: (MonadThread m, MonadDNS m) => m ()
 dnsWorkers = do
     sendMulticast notImplemented
-    notImplemented --sleep
-    --sendTo sock "Hello, world" addr
+    delay 50
 
