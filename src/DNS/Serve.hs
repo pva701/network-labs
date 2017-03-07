@@ -4,25 +4,25 @@ module DNS.Serve
        ( runDNS
        ) where
 
-import           Control.Concurrent.STM (modifyTVar', newTVarIO, readTVar, throwSTM,
+import           Control.Concurrent.STM (TVar, modifyTVar', newTVarIO, readTVar, throwSTM,
                                          writeTVar)
 import           Control.Exception      (throwIO)
 import           Data.Hashable          (hash)
 import qualified Data.Map.Strict        as M
 import           Network.Multicast      (multicastReceiver)
-import           Network.Socket         (HostName, SockAddr (SockAddrInet), Socket)
+import           Network.Socket         (SockAddr (SockAddrInet), Socket)
 import           Prelude                (read)
 import           System.Timeout         (timeout)
-import           Universum              hiding (ByteString)
+import           Universum
 
 import           DNS.Common             (addrToIPv4, createUdpSocket, delay, logInfo,
                                          recvMsg, repeatN, sendUnicastMsg)
 import           DNS.Trans              (DNSHolder (..), runDNSHolder)
 import           DNS.Types              (DNSException (..), DNSMessage (..), DNSReq (..),
-                                         DNSResp (..), DNSState (..), HostMap, IPv4,
-                                         RawAddress, toHostAddress)
+                                         DNSResp (..), DNSState (..), HostMap, HostName,
+                                         IPv4, RawAddress, toHostAddress)
 
-runDNS :: RawAddress -> String -> IO ()
+runDNS :: RawAddress -> String -> IO (TVar HostMap)
 runDNS (second fromIntegral -> (ipv4str, port)) ownHost = do
     let ipv4 = read @IPv4 ipv4str
     unicastSocket <- createUdpSocket
@@ -38,7 +38,8 @@ runDNS (second fromIntegral -> (ipv4str, port)) ownHost = do
     logInfo $ "Listeners are starting..."
     void $ forkIO $ runner varKnown $ dnsListeners
     logInfo $ "Ping worker is starting..."
-    runner varKnown $ dnsPingWorker
+    void $ forkIO $ runner varKnown $ dnsPingWorker
+    pure varKnown
 
 joinNetwork :: DNSHolder IO HostMap
 joinNetwork = do

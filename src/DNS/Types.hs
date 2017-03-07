@@ -10,6 +10,7 @@ module DNS.Types
        , HostMap
        , DNSException (..)
 
+       , HostName
        , IPv4
        , fromHostAddress
        , toHostAddress
