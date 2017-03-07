@@ -36,7 +36,7 @@ argsParser = do
     dnsPort <- option auto $
         long    "dns-port" <>
         metavar "INT" <>
-        value   5353 <>
+        value   5555 <>
         help    "Port on which  mDNS will work"
     pure Args{..}
 

@@ -2,100 +2,68 @@
 
 module DNS.Types
        ( DNSState (..)
+
+       , DNSReq (..)
+       , DNSResp (..)
+       , DNSMessage (..)
+       , HostMap
+       , DNSException (..)
+
        , IPv4
-
-       , DNSServReqMsg (..)
-       , DNSServRespMsg (..)
-       , DNSClientReqMsg (..)
-       , DNSClientRespMsg (..)
-
-       , MonadDNS (..)
+       , fromHostAddress
+       , toHostAddress
        ) where
 
 import           Control.Concurrent.STM (TVar)
-import           Control.Monad.Trans    (MonadTrans (lift))
 import           Data.Binary            (Binary (..), getWord8, putWord8)
-import           Data.ByteString.Lazy   (ByteString)
+import           Data.IP                (IPv4, fromHostAddress, toHostAddress)
 import           Network.Socket         (HostName, SockAddr, Socket)
 import           Universum              hiding (ByteString)
 
-type IPv4 = (Word8, Word8, Word8, Word8)
 type HostMap = Map HostName IPv4
 
 data DNSState = DNSState
-    { activeHosts :: !(TVar HostMap)
-    , pings       :: !(TVar HostMap)
-    , ownHost     :: !HostName
-    , sendSocket  :: !(Socket, SockAddr)
-    , recvSocket  :: !Socket
+    { activeHosts      :: !(TVar HostMap)
+    , pingHosts        :: !(TVar HostMap)
+    , ownHost          :: !HostName
+    , mRecvSocket      :: !Socket
+    , uSendSocket      :: !Socket
+    , multicastAddress :: !SockAddr
     }
 
-data DNSServReqMsg
+data DNSReq
     = DNSHello !HostName
     | DNSPing !HostName
-    deriving (Generic)
+    | DNSResolve !HostName
+    deriving (Generic, Show)
 
-data DNSServRespMsg
-    = DNSOlleh !HostMap
+data DNSResp
+    = DNSOlleh !IPv4 !HostMap
     | DNSWrongHost
-    deriving (Generic)
+    | DNSResolved !(Maybe IPv4)
+    deriving (Generic, Show)
 
-data DNSClientReqMsg = DNSRequest !HostName
-    deriving (Generic)
-data DNSClientRespMsg = DNSResponseIP !IPv4 | DNSResponseUnknown
-    deriving (Generic)
+data DNSMessage = Rq DNSReq | Rsp DNSResp
+    deriving Show
 
-instance Binary DNSServReqMsg where
-    put (DNSHello x) = putWord8 0 >> put x
-    put (DNSPing x)  = putWord8 1 >> put x
+data DNSException
+    = SuchHostAlreadyExists
+    | UnknownIPFormat
+    deriving Show
+instance Exception DNSException
+
+instance Binary IPv4 where
+    put = put . toHostAddress
+    get = fromHostAddress <$> get
+
+instance Binary DNSReq where
+instance Binary DNSResp where
+
+instance Binary DNSMessage where
+    put (Rq x)  = putWord8 0 >> put x
+    put (Rsp x) = putWord8 1 >> put x
     get = do
         tag <- getWord8
-        if | tag == 0 -> DNSHello <$> get
-           | tag == 1 -> DNSPing <$> get
+        if | tag == 0 -> Rq <$> get
+           | tag == 1 -> Rsp <$> get
            | otherwise -> fail "Unexpected tag"
-
-instance Binary DNSServRespMsg where
-    put (DNSOlleh x) = putWord8 2 >> put x
-    put DNSWrongHost = putWord8 6
-    get = do
-        tag <- getWord8
-        if | tag == 2 -> DNSOlleh <$> get
-           | tag == 6 -> pure DNSWrongHost
-           | otherwise -> fail "Unexpected tag"
-
-instance Binary DNSClientReqMsg where
-    put (DNSRequest x) = putWord8 3 >> put x
-    get = do
-        tag <- getWord8
-        if | tag == 3 -> DNSRequest <$> get
-           | otherwise -> fail "Unexpected tag"
-
-instance Binary DNSClientRespMsg where
-    put (DNSResponseIP x)  = putWord8 4 >> put x
-    put DNSResponseUnknown = putWord8 5
-    get = do
-        tag <- getWord8
-        if | tag == 4 -> DNSResponseIP <$> get
-           | tag == 5 -> pure DNSResponseUnknown
-           | otherwise -> fail "Unexpected tag"
-
-class MonadIO m => MonadDNS m where
-    myHost   :: m HostName
-    askState :: m (TVar HostMap, TVar HostMap)
-
-    sendMulticast :: ByteString -> m ()
-    sendDirectly  :: ByteString -> SockAddr -> m ()
-    recvMulticast :: m (ByteString, SockAddr)
-
-    default askState
-        :: (MonadTrans t, MonadDNS m', t m' ~ m) => m (TVar HostMap, TVar HostMap)
-    askState = lift askState
-
-    default sendMulticast
-        :: (MonadTrans t, MonadDNS m', t m' ~ m) => ByteString -> m ()
-    sendMulticast = lift . sendMulticast
-
-    default recvMulticast
-        :: (MonadTrans t, MonadDNS m', t m' ~ m) => m (ByteString, SockAddr)
-    recvMulticast = lift recvMulticast
-

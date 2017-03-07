@@ -1,17 +1,16 @@
+{-# LANGUAGE BangPatterns #-}
+
 module DNS.Trans
        ( DNSHolder (..)
        , runDNSHolder
        ) where
 
-import           Control.Concurrent.STM    (newTVar)
-import           Data.ByteString.Lazy      as BSL
-import           Network.Multicast         (multicastReceiver, multicastSender)
-import           Network.Socket            (HostName)
-import           Network.Socket.ByteString (recvFrom, sendTo)
+import           Control.Concurrent.STM (TVar)
+import           Network.Socket         (HostName)
+import           Network.Socket         (SockAddr, Socket)
 import           Universum
 
-import           Common                    (MonadThread)
-import           DNS.Types                 (DNSState (..), MonadDNS (..))
+import           DNS.Types              (DNSState (..), HostMap)
 
 newtype DNSHolder m a = DNSHolder
     { getDNSHolder :: ReaderT DNSState m a
@@ -19,26 +18,19 @@ newtype DNSHolder m a = DNSHolder
                , Applicative
                , Monad
                , MonadIO
-               , MonadThread
+               , MonadReader DNSState
+               , MonadThrow
+               , MonadCatch
                )
 
-instance MonadIO m => MonadDNS (DNSHolder m) where
-    myHost = DNSHolder $ asks ownHost
-    askState = DNSHolder $ asks (bimap activeHosts pings . join (,))
-    sendMulticast (BSL.toStrict -> bytes) = DNSHolder $ do
-        (sock, addr) <- asks sendSocket
-        () <$ liftIO (sendTo sock bytes addr)
-    sendDirectly (BSL.toStrict -> bytes) addr = DNSHolder $ do
-        (sock, _) <- asks sendSocket
-        () <$ liftIO (sendTo sock bytes addr)
-    recvMulticast = DNSHolder $ do
-        sock <- asks recvSocket
-        liftIO (first BSL.fromStrict <$> recvFrom sock 1024) -- TODO length
-
-runDNSHolder :: MonadIO m => HostName -> String -> Word16 -> DNSHolder m a -> m a
-runDNSHolder host ip (fromIntegral -> port) holder = do
-    hosts1 <- atomically $ newTVar mempty
-    hosts2 <- atomically $ newTVar mempty
-    sender <- liftIO $ multicastSender ip port
-    recv <- liftIO $ multicastReceiver ip port
-    runReaderT (getDNSHolder holder) $ DNSState hosts1 hosts2 host sender recv
+runDNSHolder :: MonadIO m
+             => TVar HostMap
+             -> TVar HostMap
+             -> HostName
+             -> Socket
+             -> Socket
+             -> SockAddr
+             -> DNSHolder m a
+             -> m a
+runDNSHolder varKnown varPings own r s multiAddr holder = do
+    runReaderT (getDNSHolder holder) $ DNSState varKnown varPings own r s multiAddr

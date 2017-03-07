@@ -20,9 +20,9 @@ library
                        DNS.Serve
                      , DNS.Trans
                      , DNS.Types
-  other-modules:       Common
   build-depends:       base >= 4.7 && < 5
                      , bytestring
+                     , iproute
                      , universum
                      , network-multicast
                      , network
@@ -32,6 +32,8 @@ library
                      , unordered-containers
                      , binary
                      , containers
+                     , text
+                     , hashable
   default-language:    Haskell2010
   ghc-options:         -Wall
                        -fno-warn-orphans
@@ -80,6 +82,7 @@ executable network-labs-server
                      , binary
                      , optparse-simple
                      , parsec
+                     , network
   default-language:    Haskell2010
   ghc-options:         -threaded -rtsopts
                        -Wall
