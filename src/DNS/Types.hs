@@ -2,6 +2,7 @@
 
 module DNS.Types
        ( DNSState (..)
+       , RawAddress
 
        , DNSReq (..)
        , DNSResp (..)
@@ -21,6 +22,7 @@ import           Network.Socket         (HostName, SockAddr, Socket)
 import           Universum              hiding (ByteString)
 
 type HostMap = Map HostName IPv4
+type RawAddress = (HostName, Word16)
 
 data DNSState = DNSState
     { activeHosts      :: !(TVar HostMap)

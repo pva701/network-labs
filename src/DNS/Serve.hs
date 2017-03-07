@@ -4,30 +4,26 @@ module DNS.Serve
        ( runDNS
        ) where
 
-import           Control.Concurrent.STM    (modifyTVar', newTVarIO, readTVar, throwSTM,
-                                            writeTVar)
-import           Control.Exception         (throwIO)
-import           Data.Binary               (decodeOrFail, encode)
-import qualified Data.ByteString.Lazy      as BSL
-import           Data.Hashable             (hash)
-import qualified Data.Map.Strict           as M
-import           Network.BSD               (getProtocolNumber)
-import           Network.Multicast         (multicastReceiver)
-import           Network.Socket            (Family (AF_INET), HostName,
-                                            SockAddr (SockAddrInet), Socket,
-                                            SocketType (Datagram), socket)
-import           Network.Socket.ByteString (recvFrom, sendTo)
-import           Prelude                   (read)
-import           System.Timeout            (timeout)
-import           Universum                 hiding (ByteString)
+import           Control.Concurrent.STM (modifyTVar', newTVarIO, readTVar, throwSTM,
+                                         writeTVar)
+import           Control.Exception      (throwIO)
+import           Data.Hashable          (hash)
+import qualified Data.Map.Strict        as M
+import           Network.Multicast      (multicastReceiver)
+import           Network.Socket         (HostName, SockAddr (SockAddrInet), Socket)
+import           Prelude                (read)
+import           System.Timeout         (timeout)
+import           Universum              hiding (ByteString)
 
-import           DNS.Trans                 (DNSHolder (..), runDNSHolder)
-import           DNS.Types                 (DNSException (..), DNSMessage (..),
-                                            DNSReq (..), DNSResp (..), DNSState (..),
-                                            HostMap, IPv4, fromHostAddress, toHostAddress)
+import           DNS.Common             (addrToIPv4, createUdpSocket, delay, logInfo,
+                                         recvMsg, repeatN, sendUnicastMsg)
+import           DNS.Trans              (DNSHolder (..), runDNSHolder)
+import           DNS.Types              (DNSException (..), DNSMessage (..), DNSReq (..),
+                                         DNSResp (..), DNSState (..), HostMap, IPv4,
+                                         RawAddress, toHostAddress)
 
-runDNS :: String -> Word16 -> String -> IO ()
-runDNS ipv4str (fromIntegral -> port) ownHost = do
+runDNS :: RawAddress -> String -> IO ()
+runDNS (second fromIntegral -> (ipv4str, port)) ownHost = do
     let ipv4 = read @IPv4 ipv4str
     unicastSocket <- createUdpSocket
     multicastSocket <- multicastReceiver ipv4str port
@@ -52,11 +48,11 @@ joinNetwork = do
     addr <- asks multicastAddress
     let helloRetry = 3
     let joinTimeout = 1000000
-    sendMsg unicastSocket addr $ Rq $ DNSHello own
+    sendUnicastMsg addr $ Rq $ DNSHello own
     res <- liftIO $
-               rep helloRetry $
-                 timeout joinTimeout $
-                   joinDo unicastSocket
+           repeatN helloRetry $
+             timeout joinTimeout $
+                joinDo unicastSocket
     case res of
         Nothing -> do
             logInfo "I am alone here"
@@ -74,14 +70,6 @@ joinNetwork = do
         _             ->
             liftIO $ throwIO SuchHostAlreadyExists
   where
-    rep :: Int -> IO (Maybe a) -> IO (Maybe a)
-    rep 0 _ = pure Nothing
-    rep n act = do
-        res <- act
-        case res of
-            Nothing -> rep (n - 1) act
-            _       -> pure res
-
     joinDo :: Socket -> IO DNSResp
     joinDo unicastSocket = do
         logInfo $ "Trying to join..."
@@ -164,38 +152,3 @@ whoReply host = do
       fmap snd $ head $ sort $
       map (first ((xor h) . hash) . join (,) . fst) $
       M.toList known
-
------------------
--- Utilities
------------------
-
-sendUnicastMsg :: SockAddr -> DNSMessage -> DNSHolder IO ()
-sendUnicastMsg addr msg = do
-    unicast <- asks uSendSocket
-    sendMsg unicast addr msg
-
-sendMsg :: MonadIO m => Socket -> SockAddr -> DNSMessage -> m ()
-sendMsg sock addr msg = void $ liftIO $ sendTo sock (BSL.toStrict $ encode msg) addr
-
-recvMsg :: MonadIO m => Socket -> m (DNSMessage, SockAddr)
-recvMsg sock = do
-    let maxSize = 65536
-    (bytes, addr) <- liftIO $ recvFrom sock maxSize
-    case decodeOrFail (BSL.fromStrict bytes) of
-        Left (_, _, er) -> do
-            logInfo $ "Couldn't parse msg: " <> er
-            recvMsg sock
-        Right (_, _, v) -> pure (v, addr)
-
-logInfo :: MonadIO m => String -> m ()
-logInfo = liftIO . print
-
-delay :: MonadIO m => Int -> m ()
-delay = liftIO . threadDelay . (1000 *)
-
-createUdpSocket :: IO Socket
-createUdpSocket = socket AF_INET Datagram =<< getProtocolNumber "udp"
-
-addrToIPv4 :: MonadFail m => SockAddr -> m IPv4
-addrToIPv4 (SockAddrInet _ ip) = pure $ fromHostAddress ip
-addrToIPv4 _                   = fail "Unknown format"
