@@ -17,9 +17,15 @@ library
   hs-source-dirs:      src
   exposed-modules:
                      -- DNS related
-                       DNS.Serve
+                       DNS.Common
+                     , DNS.Resolve
+                     , DNS.Serve
                      , DNS.Trans
                      , DNS.Types
+
+                     , Service.Consumer
+                     , Service.Producer
+
   build-depends:       base >= 4.7 && < 5
                      , bytestring
                      , iproute

@@ -20,11 +20,10 @@ import qualified Web.Scotty                           as Sc (ScottyM, get, notFo
                                                              status, text)
 
 import           DNS.Serve                            (runDNS)
-import           DNS.Types                            (HostMap, HostName, IPv4,
-                                                       RawAddress)
+import           DNS.Types                            (HostMap, IPv4, RawAddress)
 
-runConsumer :: RawAddress -> Word16 -> HostName -> IO ()
-runConsumer address (fromIntegral -> httpPort) ownHost = do
+runConsumer :: RawAddress -> RawAddress -> IO ()
+runConsumer address (ownHost, fromIntegral -> httpPort) = do
     knownVar <- runDNS address ownHost
     application <- Sc.scottyApp $ consumerWebApp knownVar
     Warp.run httpPort $ logStdoutDev  application

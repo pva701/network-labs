@@ -2,14 +2,12 @@ module Main where
 
 import           Universum
 
-import           DNS.Serve      (runDNS)
-import           Options        (Args (..), getOptions)
-
-import           Network.Socket (Family (AF_INET, AF_INET6), isSupportedFamily)
+import           Options          (Args (..), WorkMode (..), getOptions)
+import           Service.Consumer (runConsumer)
 
 main :: IO ()
 main = do
-    print $ AF_INET < AF_INET6
-    print $ isSupportedFamily AF_INET6
-    --Args{..} <- getOptions
-    --runDNS dnsIP dnsPort ownHost
+    Args{..} <- getOptions
+    case workMode of
+        ProducerMode -> notImplemented
+        ConsumerMode -> runConsumer (dnsIP, dnsPort) (httpHost, httpPort)

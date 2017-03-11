@@ -2,32 +2,51 @@
 
 module Options
        ( Args (..)
+       , WorkMode (..)
        , getOptions
        ) where
 
-import           Options.Applicative.Simple (Parser, auto, help, long, metavar, option,
-                                             simpleOptions, strOption, value)
+import           Options.Applicative.Simple (Parser, ReadM, auto, eitherReader, help,
+                                             long, metavar, option, simpleOptions,
+                                             strOption, value)
+import           Text.Parsec                (Parsec, parse)
+import qualified Text.Parsec.Char           as P
+import qualified Text.Parsec.String         as P
 import           Universum
 
 data WorkMode = ProducerMode | ConsumerMode
     deriving Show
 
 data Args = Args
-    { ownHost :: !String
-    , dnsIP   :: !String
-    , dnsPort :: !Word16
+    { workMode :: !WorkMode
+    , httpHost :: !String
+    , httpPort :: !Word16
+    , dnsIP    :: !String
+    , dnsPort  :: !Word16
     } deriving Show
+
+fromParsec :: Parsec String () a -> ReadM a
+fromParsec parser = eitherReader $ either (Left . show) Right . parse parser "<CLI options>"
+
+workModeParser :: P.Parser WorkMode
+workModeParser = ProducerMode <$ (P.string "producer") <|>
+                 ConsumerMode <$ (P.string "consumer")
 
 argsParser :: Parser Args
 argsParser = do
-    -- workMode <- strOption $
-    --     long    "work-mode" <>
-    --     metavar "SWITCH" <>
-    --     help    "WorkMode of node: Consumer or Producer"
-    ownHost <- strOption $
+    workMode <- option (fromParsec workModeParser) $
+        long    "work-mode" <>
+        metavar "MODE" <>
+        help    "WorkMode of node: Consumer or Producer"
+    httpHost <- strOption $
         long "host" <>
         metavar "STRING" <>
-        help "Host of node in DNS"
+        help "Host of node"
+    httpPort <- option auto $
+        long    "port" <>
+        metavar "INT" <>
+        value   8080 <>
+        help    "Http port"
     dnsIP <- strOption $
         long    "dns-ip" <>
         metavar "IP" <>
