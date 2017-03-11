@@ -15,7 +15,7 @@ main = do
     case ipMB of
         Nothing -> putStrLn "Couldn't resolve host"
         Just ip -> do
-            bytesMB <- requestFile ip file
+            bytesMB <- requestFile (ip, httpPort) file
             case bytesMB of
                 Nothing    -> putStrLn "No such file"
                 Just bytes -> writeFile file bytes

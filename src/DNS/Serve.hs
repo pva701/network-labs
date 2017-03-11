@@ -129,8 +129,8 @@ dnsPingWorker = do
     delay 1000
     varKnown <- asks activeHosts
     varPings <- asks pingHosts
-    pings <- atomically $ readTVar varPings
-    logInfo $ "Ping hosts: " ++ show pings
+    --pings <- atomically $ readTVar varPings
+    --logInfo $ "Ping hosts: " ++ show pings
     atomically $ do
         readTVar varPings >>= writeTVar varKnown
         writeTVar varPings mempty

@@ -9,9 +9,9 @@ import           Universum            hiding (ByteString)
 
 import           DNS.Types            (IPv4)
 
-requestFile :: IPv4 -> FilePath -> IO (Maybe ByteString)
-requestFile ipv4 filename = do
-    resp <- Wr.get $ "http://" ++ show ipv4 ++ "/" ++ filename -- TODO vot eto kaef
+requestFile :: (IPv4, Word16) -> FilePath -> IO (Maybe ByteString)
+requestFile (ipv4, port) filename = do
+    resp <- Wr.get $ "http://" ++ show ipv4 ++ ":" ++ show port ++ "/" ++ filename -- TODO vot eto kaef
     pure $
         if | resp ^. Wr.responseStatus . Wr.statusCode == 200 ->
               Just $ resp ^. Wr.responseBody
