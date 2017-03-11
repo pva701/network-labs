@@ -2,42 +2,27 @@
 
 module Options
        ( Args (..)
-       , WorkMode (..)
        , getOptions
        ) where
 
-import           Options.Applicative.Simple (Parser, ReadM, auto, eitherReader, help,
-                                             long, metavar, option, simpleOptions,
-                                             strOption, value)
-import           Text.Parsec                (Parsec, parse)
-import qualified Text.Parsec.Char           as P
-import qualified Text.Parsec.String         as P
+import           Options.Applicative.Simple (Parser, auto, help, long, metavar, option,
+                                             simpleOptions, strOption, value)
 import           Universum
 
-data WorkMode = ProducerMode !FilePath | ConsumerMode
-    deriving Show
-
 data Args = Args
-    { workMode :: !WorkMode
+    { file     :: !String
     , httpHost :: !String
     , httpPort :: !Word16
     , dnsIP    :: !String
     , dnsPort  :: !Word16
     } deriving Show
 
-fromParsec :: Parsec String () a -> ReadM a
-fromParsec parser = eitherReader $ either (Left . show) Right . parse parser "<CLI options>"
-
-workModeParser :: P.Parser WorkMode
-workModeParser = ProducerMode <$ (P.string "producer:") <*> (some $ P.noneOf " ") <|>
-                 ConsumerMode <$ (P.string "consumer")
-
 argsParser :: Parser Args
 argsParser = do
-    workMode <- option (fromParsec workModeParser) $
-        long    "work-mode" <>
-        metavar "MODE" <>
-        help    "WorkMode of node: Consumer or Producer"
+    file <- strOption $
+        long    "file" <>
+        metavar "FILENAME" <>
+        help    "File name"
     httpHost <- strOption $
         long "host" <>
         metavar "STRING" <>

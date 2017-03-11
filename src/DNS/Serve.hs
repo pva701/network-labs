@@ -85,9 +85,11 @@ dnsListeners :: DNSHolder IO ()
 dnsListeners = do
     multicast <- asks mRecvSocket
     (msg, from) <- recvMsg multicast
-    logInfo $ "Message: " ++ show msg ++ " has been received, from: " ++ show from
     case msg of
-        Rq ms -> messageHandler ms from
+        Rq ms@(DNSPing _) -> messageHandler ms from
+        Rq ms -> do
+            messageHandler ms from
+            logInfo $ "Message: " ++ show msg ++ " has been received, from: " ++ show from
         Rsp _ -> logInfo $ "Unexpected message"
     dnsListeners
   where

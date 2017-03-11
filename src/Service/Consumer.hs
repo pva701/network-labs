@@ -12,8 +12,6 @@ import           Data.ByteString.Lazy                 (ByteString)
 import           Network.HTTP.Types.Status            (status200, status404)
 import qualified Network.Wai.Handler.Warp             as Warp
 import           Network.Wai.Middleware.RequestLogger (logStdoutDev)
-import qualified Network.Wreq                         as Wr (get, responseBody,
-                                                             responseStatus, statusCode)
 import           Universum                            hiding (ByteString)
 import qualified Web.Scotty                           as Sc (ScottyM, get, notFound,
                                                              param, raw, regex, scottyApp,
@@ -21,6 +19,7 @@ import qualified Web.Scotty                           as Sc (ScottyM, get, notFo
 
 import           DNS.Serve                            (runDNS)
 import           DNS.Types                            (HostMap, IPv4, RawAddress)
+import           Service.Common                       (requestFile)
 
 runConsumer :: RawAddress -> RawAddress -> IO ()
 runConsumer address (ownHost, fromIntegral -> httpPort) = do
@@ -47,18 +46,12 @@ handleRequest knownHostsVar filename = do
     ips <- toList <$> readTVarIO knownHostsVar
     let l = length ips
     ivars <- runParIO $ replicateM l new
-    mapM_ (forkIO . (uncurry requestFile)) $ zip ivars ips
+    mapM_ (forkIO . (uncurry reqFile)) $ zip ivars ips
     runParIO $ foldM putBS Nothing ivars
   where
     putBS :: Maybe ByteString -> IVar (Maybe ByteString) -> Par (Maybe ByteString)
     putBS r@(Just _) _ = pure r
     putBS _ ivar       = get ivar
 
-    requestFile :: IVar (Maybe ByteString) -> IPv4 -> IO ()
-    requestFile ivar ipv4 = do
-        resp <- Wr.get $ "http://" ++ show ipv4 ++ "/" ++ filename -- TODO vot eto kaef
-        runParIO $
-            if | resp ^. Wr.responseStatus . Wr.statusCode == 200 ->
-                  put_ ivar $ Just $ resp ^. Wr.responseBody
-               | otherwise ->
-                  put_ ivar Nothing
+    reqFile :: IVar (Maybe ByteString) -> IPv4 -> IO ()
+    reqFile ivar ipv4 = runParIO . put_ ivar =<< requestFile ipv4 filename
