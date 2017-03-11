@@ -14,7 +14,7 @@ import qualified Text.Parsec.Char           as P
 import qualified Text.Parsec.String         as P
 import           Universum
 
-data WorkMode = ProducerMode | ConsumerMode
+data WorkMode = ProducerMode !FilePath | ConsumerMode
     deriving Show
 
 data Args = Args
@@ -29,7 +29,7 @@ fromParsec :: Parsec String () a -> ReadM a
 fromParsec parser = eitherReader $ either (Left . show) Right . parse parser "<CLI options>"
 
 workModeParser :: P.Parser WorkMode
-workModeParser = ProducerMode <$ (P.string "producer") <|>
+workModeParser = ProducerMode <$ (P.string "producer") <*> (some $ P.noneOf " ") <|>
                  ConsumerMode <$ (P.string "consumer")
 
 argsParser :: Parser Args

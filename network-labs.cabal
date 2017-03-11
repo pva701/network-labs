@@ -33,6 +33,7 @@ library
                      , network-multicast
                      , network
                      , log-warper
+                     , filepath
                      , stm
                      , mtl
                      , unordered-containers
