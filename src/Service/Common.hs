@@ -2,6 +2,7 @@ module Service.Common
        ( requestFile
        , toUrl
        , requestTask
+       , hasFile
        ) where
 
 import           Data.ByteString.Lazy (ByteString)
@@ -20,11 +21,16 @@ toUrl (ipv4, port) path =
 
 requestFile :: (IPv4, Word16) -> FilePath -> IO (Maybe ByteString)
 requestFile addr filename = do
-    resp <- Wr.get $ toUrl addr filename
+    resp <- Wr.get $ toUrl addr ("download" </> filename)
     pure $
         if | resp ^. Wr.responseStatus . Wr.statusCode == 200 ->
               Just $ resp ^. Wr.responseBody
             | otherwise -> Nothing
+
+hasFile :: (IPv4, Word16) -> FilePath -> IO Bool
+hasFile addr filename = do
+    resp <- Wr.get $ toUrl addr ("file" </> filename)
+    pure $ resp ^. Wr.responseStatus . Wr.statusCode == 200
 
 requestTask :: (IPv4, Word16) -> FilePath -> Int -> IO (Maybe Text)
 requestTask addr task arg = do
