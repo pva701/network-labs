@@ -22,12 +22,12 @@ import           DNS.Types                            (HostMap, IPv4, RawAddress
 import           Service.Common                       (requestFile)
 
 runConsumer :: RawAddress -> RawAddress -> IO ()
-runConsumer (ownHost, fromIntegral -> httpPort) address = do
+runConsumer (ownHost, fromIntegral -> httpPort) dnsAddress = do
     logInfo $ "Consumer mode"
     logInfo $ "Consumer http address: " <> ownHost <> ":" <> show httpPort
 
-    knownVar <- runDNS address ownHost
-    application <- Sc.scottyApp $ runReaderT consumerWebApp (snd address, knownVar)
+    knownVar <- runDNS dnsAddress ownHost
+    application <- Sc.scottyApp $ runReaderT consumerWebApp (fromIntegral httpPort, knownVar)
     Warp.run httpPort $ logStdoutDev  application
 
 consumerWebApp :: ReaderT (Word16, TVar HostMap) Sc.ScottyM ()
