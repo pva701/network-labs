@@ -28,8 +28,7 @@ data Args = Args
 downParser :: Mod CommandFields Action
 downParser = command "download" $ info opts desc
   where
-    opts = do
-        Download <$> strOption (
+    opts = Download <$> strOption (
             long    "file" <>
             metavar "FILENAME" <>
             help    "File name")
