@@ -55,11 +55,13 @@ executorWebApp :: ReaderT ExecState Sc.ScottyM ()
 executorWebApp = do
     st@ExecState {..} <- ask
     lift $ do
-        Sc.get "^/execute/(.*)" $ do
-            (n :: Int) <- Sc.param "1"
+        Sc.get "/execute/:n" $ do
+            logInfo $ "LOL HERE"
+            (n :: Int) <- Sc.param "n"
             startTime <- liftIO $ getPOSIXTime
             resMB <- liftIO $ runReaderT (handleTask n) st
             endTime <- liftIO $ getPOSIXTime
+            logInfo $ show resMB
             case resMB of
                 Just res -> do
                     Sc.text $ TL.fromStrict $ T.intercalate "\n" $
