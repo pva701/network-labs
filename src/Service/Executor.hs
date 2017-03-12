@@ -77,7 +77,7 @@ executorWebApp = do
                       , "Seconds: " <> show slTime
                       , "Time: " <> show tm]
                     Sc.status status200
-                Nothing -> runReaderT (searchRedirect $ "/fib/" ++ show slTime) st
+                Nothing -> runReaderT (searchRedirect $ "/sleep/" ++ show slTime) st
 
 searchRedirect :: FilePath -> ReaderT ExecState Sc.ActionM ()
 searchRedirect redPath = do

@@ -22,7 +22,7 @@ import           DNS.Types                 (DNSMessage, IPv4, fromHostAddress,
                                             uSendSocket)
 
 logInfo :: MonadIO m => String -> m ()
-logInfo = liftIO . print
+logInfo = liftIO . putStrLn
 
 delay :: MonadIO m => Int -> m ()
 delay = liftIO . threadDelay . (1000 *)
