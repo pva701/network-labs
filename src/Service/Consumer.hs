@@ -1,5 +1,4 @@
 {-# LANGUAGE ScopedTypeVariables #-}
--- |
 
 module Service.Consumer
        ( runConsumer

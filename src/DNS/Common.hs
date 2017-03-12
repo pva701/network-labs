@@ -9,7 +9,7 @@ module DNS.Common
        , addrToIPv4
        ) where
 
-import           Data.Binary               (decodeOrFail, encode)
+import           Data.Binary               (Binary, decodeOrFail, encode)
 import qualified Data.ByteString.Lazy      as BSL
 import           Network.BSD               (getProtocolNumber)
 import           Network.Socket            (Family (AF_INET), SockAddr (SockAddrInet),
@@ -38,16 +38,15 @@ repeatN n act = do
         Nothing -> repeatN (n - 1) act
         _       -> pure res
 
-
 sendUnicastMsg :: SockAddr -> DNSMessage -> DNSHolder IO ()
 sendUnicastMsg addr msg = do
     unicast <- asks uSendSocket
     sendMsg unicast addr msg
 
-sendMsg :: MonadIO m => Socket -> SockAddr -> DNSMessage -> m ()
+sendMsg :: (Binary a, MonadIO m) => Socket -> SockAddr -> a -> m ()
 sendMsg sock addr msg = void $ liftIO $ sendTo sock (BSL.toStrict $ encode msg) addr
 
-recvMsg :: MonadIO m => Socket -> m (DNSMessage, SockAddr)
+recvMsg :: (Binary a, MonadIO m) => Socket -> m (a, SockAddr)
 recvMsg sock = do
     let maxSize = 65536
     (bytes, addr) <- liftIO $ recvFrom sock maxSize

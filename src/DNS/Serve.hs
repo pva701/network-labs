@@ -57,7 +57,7 @@ joinNetwork = do
     case res of
         Nothing -> do
             logInfo "I am alone here"
-            (_, ownAddr) <- recvMsg multicastSocket
+            (_, ownAddr) <- recvMsg @DNSMessage multicastSocket
             let ipMB = addrToIPv4 ownAddr
             case ipMB of
                 Nothing -> liftIO $ throwIO UnknownIPFormat
@@ -66,8 +66,7 @@ joinNetwork = do
                     pure $ M.singleton own ip
         Just (DNSOlleh myIP known) -> do
             logInfo $ "My IP: " ++ show myIP
-            (_, _) <- recvMsg multicastSocket
-            pure known
+            M.insert own myIP known <$ recvMsg @DNSMessage multicastSocket
         _             ->
             liftIO $ throwIO SuchHostAlreadyExists
   where

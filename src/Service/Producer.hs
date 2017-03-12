@@ -5,7 +5,7 @@ module Service.Producer
        ( runProducer
        ) where
 
-import           Network.HTTP.Types.Status            (status200, status404)
+import           Network.HTTP.Types.Status            (status404)
 import qualified Network.Wai.Handler.Warp             as Warp
 import           Network.Wai.Middleware.RequestLogger (logStdoutDev)
 import           System.FilePath                      ((</>))

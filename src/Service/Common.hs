@@ -1,5 +1,6 @@
 module Service.Common
        ( requestFile
+       , toUrl
        ) where
 
 import           Data.ByteString.Lazy (ByteString)
@@ -9,9 +10,13 @@ import           Universum            hiding (ByteString)
 
 import           DNS.Types            (IPv4)
 
+toUrl :: (IPv4, Word16) -> FilePath -> String
+toUrl (ipv4, port) path =
+    "http://" ++ show ipv4 ++ ":" ++ show port ++ "/" ++ path -- TODO vot eto kaef
+
 requestFile :: (IPv4, Word16) -> FilePath -> IO (Maybe ByteString)
-requestFile (ipv4, port) filename = do
-    resp <- Wr.get $ "http://" ++ show ipv4 ++ ":" ++ show port ++ "/" ++ filename -- TODO vot eto kaef
+requestFile addr filename = do
+    resp <- Wr.get $ toUrl addr filename
     pure $
         if | resp ^. Wr.responseStatus . Wr.statusCode == 200 ->
               Just $ resp ^. Wr.responseBody

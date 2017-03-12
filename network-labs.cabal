@@ -26,6 +26,8 @@ library
                      , Service.Common
                      , Service.Consumer
                      , Service.Producer
+                     , Service.Executor
+                     , Service.Types
 
   build-depends:       base >= 4.7 && < 5
                      , bytestring
@@ -37,6 +39,7 @@ library
                      , filepath
                      , stm
                      , mtl
+                     , time
                      , unordered-containers
                      , binary
                      , containers
