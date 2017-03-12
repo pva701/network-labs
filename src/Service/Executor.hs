@@ -143,7 +143,7 @@ executorWorker = do
     ExecState {..} <- ask
     free <- atomically $ readTVar freeVar
     liftIO $ sendMsg unicastSocket multicastAddress $ FreeThreads ownIP free
-    delay 1000
+    delay 1500
     executorWorker
 
 executorListener :: ReaderT ExecState IO ()
