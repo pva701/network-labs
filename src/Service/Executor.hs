@@ -11,7 +11,7 @@ import qualified Data.Map.Strict                      as M
 import           Data.Maybe                           (fromJust)
 import qualified Data.Text                            as T
 import qualified Data.Text.Lazy                       as TL
-import           Data.Time.Clock.POSIX                (getPOSIXTime)
+import           Data.Time.Clock.POSIX                (POSIXTime, getPOSIXTime)
 import           Network.HTTP.Types.Status            (status200, status404)
 import           Network.Multicast                    (multicastReceiver)
 import           Network.Socket                       (SockAddr (..))
@@ -55,31 +55,55 @@ executorWebApp :: ReaderT ExecState Sc.ScottyM ()
 executorWebApp = do
     st@ExecState {..} <- ask
     lift $ do
-        Sc.get "/execute/:n" $ do
-            logInfo $ "LOL HERE"
+        Sc.get "/fib/:n" $ do
             (n :: Int) <- Sc.param "n"
-            startTime <- liftIO $ getPOSIXTime
-            resMB <- liftIO $ runReaderT (handleTask n) st
-            endTime <- liftIO $ getPOSIXTime
-            logInfo $ show resMB
+            resMB <- liftIO $ runReaderT (tryExecWithTime (pure $ fibonacciTask n 0 1)) st
             case resMB of
-                Just res -> do
+                Just (res, tm) -> do
                     Sc.text $ TL.fromStrict $ T.intercalate "\n" $
                       [ "Executor: " <> (T.pack ownHttpHost) <> "/" <> (show ownIP)
+                      , "N: " <> show n
                       , "Result: " <> show res
-                      , "Time: " <> show (endTime - startTime)]
+                      , "Time: " <> show tm]
                     Sc.status status200
-                Nothing -> do
-                    othersFree <- atomically $ readTVar othersFreeVar
-                    let freeMB = find (\x -> snd x > 0 && fst x /= ownIP) (M.toList othersFree)
-                    case freeMB of
-                        Nothing        ->
-                            Sc.status status404 >> Sc.text "Worker not found"
-                        Just (ipv4, _) ->
-                            Sc.redirect $ TL.pack $ toUrl (ipv4, httpPort) ("/execute/" ++ show n)
+                Nothing -> runReaderT (searchRedirect $ "/fib/" ++ show n) st
+        Sc.get "/sleep/:time" $ do
+            (slTime :: Int) <- Sc.param "time"
+            resMB <- liftIO $ runReaderT (tryExecWithTime $ sleepTask slTime) st
+            case resMB of
+                Just (_, tm) -> do
+                    Sc.text $ TL.fromStrict $ T.intercalate "\n" $
+                      [ "Executor: " <> (T.pack ownHttpHost) <> "/" <> (show ownIP)
+                      , "Seconds: " <> show slTime
+                      , "Time: " <> show tm]
+                    Sc.status status200
+                Nothing -> runReaderT (searchRedirect $ "/fib/" ++ show slTime) st
 
-handleTask :: Int -> ReaderT ExecState IO (Maybe Integer)
-handleTask fibN = do
+searchRedirect :: FilePath -> ReaderT ExecState Sc.ActionM ()
+searchRedirect redPath = do
+    ExecState {..} <- ask
+    lift $ do
+        othersFree <- atomically $ readTVar othersFreeVar
+        let freeMB = find (\x -> snd x > 0 && fst x /= ownIP) (M.toList othersFree)
+        case freeMB of
+            Nothing        ->
+                Sc.status status404 >> Sc.text "Free thread not found"
+            Just (ipv4, _) ->
+                Sc.redirect $ TL.pack $ toUrl (ipv4, httpPort) redPath
+
+tryExecWithTime :: IO a -> ReaderT ExecState IO (Maybe (a, POSIXTime))
+tryExecWithTime task = do
+    st@ExecState {..} <- ask
+    lift $ do
+        startTime <- liftIO $ getPOSIXTime
+        resMB <- liftIO $ runReaderT (tryExecTask task) st
+        endTime <- liftIO $ getPOSIXTime
+        case resMB of
+            Just res -> pure $ Just (res, endTime - startTime)
+            Nothing  -> pure Nothing
+
+tryExecTask :: IO a -> ReaderT ExecState IO (Maybe a)
+tryExecTask task = do
     ExecState{..} <- ask
     lift $ do
         numFreeMB <- tryAcquire freeVar
@@ -87,7 +111,7 @@ handleTask fibN = do
             Nothing -> pure Nothing
             Just free -> do
                 sendMsg unicastSocket multicastAddress $ FreeThreads ownIP free
-                let !res = fib fibN 0 1
+                res <- task
                 sendMsg unicastSocket multicastAddress . FreeThreads ownIP =<< release freeVar
                 pure $ Just res
   where
@@ -104,11 +128,14 @@ handleTask fibN = do
         modifyTVar freeVar (+1)
         readTVar freeVar
 
-    -- f0 = 1, f1 = 1, f2 = 2,...
-    fib :: Int -> Integer -> Integer -> Integer
-    fib !n !a !b
-        | n == 0    = b
-        | otherwise = fib (n - 1) b (a + b)
+-- f0 = 1, f1 = 1, f2 = 2,...
+fibonacciTask :: Int -> Integer -> Integer -> Integer
+fibonacciTask !n !a !b
+    | n == 0    = b
+    | otherwise = fibonacciTask (n - 1) b (a + b)
+
+sleepTask :: Int -> IO ()
+sleepTask = delay . (*1000)
 
 executorWorker :: ReaderT ExecState IO ()
 executorWorker = do
