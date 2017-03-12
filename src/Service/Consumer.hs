@@ -16,12 +16,16 @@ import qualified Web.Scotty                           as Sc (ScottyM, get, notFo
                                                              param, raw, regex, scottyApp,
                                                              status, text)
 
+import           DNS.Common                           (logInfo)
 import           DNS.Serve                            (runDNS)
 import           DNS.Types                            (HostMap, IPv4, RawAddress)
 import           Service.Common                       (requestFile)
 
 runConsumer :: RawAddress -> RawAddress -> IO ()
-runConsumer address (ownHost, fromIntegral -> httpPort) = do
+runConsumer (ownHost, fromIntegral -> httpPort) address = do
+    logInfo $ "Consumer mode"
+    logInfo $ "Consumer http address: " <> ownHost <> ":" <> show httpPort
+
     knownVar <- runDNS address ownHost
     application <- Sc.scottyApp $ runReaderT consumerWebApp (snd address, knownVar)
     Warp.run httpPort $ logStdoutDev  application

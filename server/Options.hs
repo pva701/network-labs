@@ -9,12 +9,18 @@ module Options
 import           Options.Applicative.Simple (Parser, ReadM, auto, eitherReader, help,
                                              long, metavar, option, simpleOptions,
                                              strOption, value)
+import           Prelude                    (read)
 import           Text.Parsec                (Parsec, parse)
 import qualified Text.Parsec.Char           as P
 import qualified Text.Parsec.String         as P
 import           Universum
 
-data WorkMode = ProducerMode !FilePath | ConsumerMode
+import           DNS.Types                  (HostName)
+
+data WorkMode
+    = ProducerMode !FilePath
+    | ConsumerMode
+    | ExecutorMode !Int !(HostName, Word16)
     deriving Show
 
 data Args = Args
@@ -28,9 +34,17 @@ data Args = Args
 fromParsec :: Parsec String () a -> ReadM a
 fromParsec parser = eitherReader $ either (Left . show) Right . parse parser "<CLI options>"
 
+addrParser :: P.Parser (HostName, Word16)
+addrParser = (,) <$>
+             (some $ P.noneOf " :") <* (P.char ':') <*>
+             (read <$> some P.digit)
+
 workModeParser :: P.Parser WorkMode
-workModeParser = ProducerMode <$ (P.string "producer:") <*> (some $ P.noneOf " ") <|>
-                 ConsumerMode <$ (P.string "consumer")
+workModeParser = ProducerMode <$ (P.string "producer") <* (P.char ':') <*> (some $ P.noneOf " ") <|>
+                 ConsumerMode <$ (P.string "consumer") <|>
+                 ExecutorMode <$ (P.string "executor") <* (P.char ':') <*>
+                                 (read <$> some P.digit) <* (P.char ':') <*>
+                                 addrParser
 
 argsParser :: Parser Args
 argsParser = do

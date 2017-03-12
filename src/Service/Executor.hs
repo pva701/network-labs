@@ -21,15 +21,20 @@ import           Prelude                              (read)
 import           Universum
 import qualified Web.Scotty                           as Sc
 
-import           DNS.Common                           (createUdpSocket, delay, recvMsg,
-                                                       sendMsg)
+import           DNS.Common                           (createUdpSocket, delay, logInfo,
+                                                       recvMsg, sendMsg)
 import           DNS.Serve                            (runDNS)
 import           DNS.Types                            (IPv4, RawAddress, toHostAddress)
 import           Service.Common                       (toUrl)
 import           Service.Types                        (ExecMessage (..), ExecState (..))
 
 runExecutor :: Int -> RawAddress -> RawAddress -> RawAddress -> IO ()
-runExecutor maxLoad (ipv4str, fromIntegral -> port) dnsAddr (ownHost, fromIntegral -> httpPort) = do
+runExecutor maxLoad (ipv4str, fromIntegral -> port) (ownHost, fromIntegral -> httpPort) dnsAddr  = do
+    logInfo $ "Executor mode"
+    logInfo $ "Max Load: " <> show maxLoad
+    logInfo $ "Exectutor multicast address: " <> ipv4str <> ":" <> show port
+    logInfo $ "Exectutor http address: " <> ownHost <> ":" <> show httpPort
+
     knownVar <- runDNS dnsAddr ownHost
     let ipv4 = read @IPv4 ipv4str
     let multicastAddr = SockAddrInet (fromIntegral port) (toHostAddress ipv4)
@@ -66,8 +71,10 @@ executorWebApp = do
                     othersFree <- atomically $ readTVar othersFreeVar
                     let freeMB = find (\x -> snd x > 0 && fst x /= ownIP) (M.toList othersFree)
                     case freeMB of
-                        Nothing        -> Sc.status status404 >> Sc.text "Worker not found"
-                        Just (ipv4, _) -> Sc.redirect $ TL.pack $ toUrl (ipv4, httpPort) ("/execute/" ++ show n)
+                        Nothing        ->
+                            Sc.status status404 >> Sc.text "Worker not found"
+                        Just (ipv4, _) ->
+                            Sc.redirect $ TL.pack $ toUrl (ipv4, httpPort) ("/execute/" ++ show n)
 
 handleTask :: Int -> ReaderT ExecState IO (Maybe Integer)
 handleTask fibN = do

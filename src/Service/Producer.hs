@@ -12,12 +12,16 @@ import           System.FilePath                      ((</>))
 import           Universum
 import qualified Web.Scotty                           as Sc
 
+import           DNS.Common                           (logInfo)
 import           DNS.Serve                            (runDNS)
 import           DNS.Types                            (RawAddress)
 
 
 runProducer :: FilePath -> RawAddress -> RawAddress -> IO ()
-runProducer rootDir address (ownHost, fromIntegral -> httpPort) = do
+runProducer rootDir (ownHost, fromIntegral -> httpPort) address  = do
+    logInfo $ "Producer mode"
+    logInfo $ "Producer http address: " <> ownHost <> ":" <> show httpPort
+
     void $ runDNS address ownHost
     application <- Sc.scottyApp $ producerWebApp rootDir
     Warp.run httpPort $ logStdoutDev  application
