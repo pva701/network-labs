@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Service.Common
        ( requestFile
        , toUrl
@@ -20,17 +21,19 @@ toUrl (ipv4, port) path =
     "http://" ++ show ipv4 ++ ":" ++ show port </> path -- TODO vot eto kaef
 
 requestFile :: (IPv4, Word16) -> FilePath -> IO (Maybe ByteString)
-requestFile addr filename = do
+requestFile addr filename = (do
     resp <- Wr.get $ toUrl addr ("download" </> filename)
     pure $
         if | resp ^. Wr.responseStatus . Wr.statusCode == 200 ->
               Just $ resp ^. Wr.responseBody
-            | otherwise -> Nothing
+            | otherwise -> Nothing)
+      `catch` (\(_::SomeException) -> pure Nothing)
 
 hasFile :: (IPv4, Word16) -> FilePath -> IO Bool
-hasFile addr filename = do
+hasFile addr filename = (do
     resp <- Wr.get $ toUrl addr ("file" </> filename)
-    pure $ resp ^. Wr.responseStatus . Wr.statusCode == 200
+    pure $ resp ^. Wr.responseStatus . Wr.statusCode == 200)
+      `catch` (\(_::SomeException) -> pure False)
 
 requestTask :: (IPv4, Word16) -> FilePath -> Int -> IO (Maybe Text)
 requestTask addr task arg = do

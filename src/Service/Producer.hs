@@ -31,7 +31,9 @@ producerWebApp :: FilePath -> Sc.ScottyM ()
 producerWebApp rootDir = do
     Sc.get (Sc.regex "^/download/(.*)$") $ do
         (filename :: FilePath) <- Sc.param "1"
-        Sc.file (rootDir </> filename)
+        ex <- liftIO $ doesFileExist $ rootDir </> filename
+        if | ex        -> Sc.file (rootDir </> filename)
+           | otherwise -> Sc.status status404 >> Sc.text "File not found"
     Sc.get (Sc.regex "^/file/(.*)$") $ do
         (filename :: FilePath) <- Sc.param "1"
         ex <- liftIO $ doesFileExist $ rootDir </> filename
