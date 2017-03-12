@@ -30,6 +30,5 @@ producerWebApp :: FilePath -> Sc.ScottyM ()
 producerWebApp rootDir = do
     Sc.get (Sc.regex "^/(.*)$") $ do
         (filename :: FilePath) <- Sc.param "1"
-        --Sc.file (rootDir </> filename) >> Sc.status status200
         Sc.file (rootDir </> filename)
     Sc.notFound $ Sc.status status404 >> Sc.text "Not found"

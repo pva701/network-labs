@@ -1,11 +1,15 @@
 module Service.Common
        ( requestFile
        , toUrl
+       , requestTask
        ) where
 
 import           Data.ByteString.Lazy (ByteString)
+import qualified Data.ByteString.Lazy as BSL
+import qualified Data.Text.Encoding   as T
 import qualified Network.Wreq         as Wr (get, responseBody, responseStatus,
                                              statusCode)
+import           System.FilePath      ((</>))
 import           Universum            hiding (ByteString)
 
 import           DNS.Types            (IPv4)
@@ -20,5 +24,12 @@ requestFile addr filename = do
     pure $
         if | resp ^. Wr.responseStatus . Wr.statusCode == 200 ->
               Just $ resp ^. Wr.responseBody
-            | otherwise ->
-              Nothing
+            | otherwise -> Nothing
+
+requestTask :: (IPv4, Word16) -> FilePath -> Int -> IO (Maybe Text)
+requestTask addr task arg = do
+    resp <- Wr.get $ toUrl addr (task </> show arg)
+    pure $
+        if | resp ^. Wr.responseStatus . Wr.statusCode == 200 ->
+              Just $ T.decodeUtf8 $ BSL.toStrict $ resp ^. Wr.responseBody
+           | otherwise -> Nothing
