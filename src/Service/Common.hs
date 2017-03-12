@@ -16,7 +16,7 @@ import           DNS.Types            (IPv4)
 
 toUrl :: (IPv4, Word16) -> FilePath -> String
 toUrl (ipv4, port) path =
-    "http://" ++ show ipv4 ++ ":" ++ show port ++ "/" ++ path -- TODO vot eto kaef
+    "http://" ++ show ipv4 ++ ":" ++ show port </> path -- TODO vot eto kaef
 
 requestFile :: (IPv4, Word16) -> FilePath -> IO (Maybe ByteString)
 requestFile addr filename = do

@@ -6,7 +6,7 @@ module Service.Executor
        ) where
 
 import           Control.Concurrent.STM               (TVar, modifyTVar, newTVarIO,
-                                                       readTVar, readTVarIO)
+                                                       readTVar, readTVarIO, writeTVar)
 import qualified Data.Map.Strict                      as M
 import           Data.Maybe                           (fromJust)
 import qualified Data.Text                            as T
@@ -42,6 +42,7 @@ runExecutor maxLoad (ipv4str, fromIntegral -> port) (ownHost, fromIntegral -> ht
           (fromJust . M.lookup ownHost <$> readTVarIO knownVar) <*>
           newTVarIO maxLoad <*>
           newTVarIO mempty <*>
+          pure knownVar <*>
           createUdpSocket <*>
           multicastReceiver ipv4str port <*>
           pure multicastAddr
@@ -66,7 +67,7 @@ executorWebApp = do
                       , "Result: " <> show res
                       , "Time: " <> show tm]
                     Sc.status status200
-                Nothing -> runReaderT (searchRedirect $ "/fib/" ++ show n) st
+                Nothing -> runReaderT (searchRedirect $ "fib/" ++ show n) st
         Sc.get "/sleep/:time" $ do
             (slTime :: Int) <- Sc.param "time"
             resMB <- liftIO $ runReaderT (tryExecWithTime $ sleepTask slTime) st
@@ -77,7 +78,7 @@ executorWebApp = do
                       , "Seconds: " <> show slTime
                       , "Time: " <> show tm]
                     Sc.status status200
-                Nothing -> runReaderT (searchRedirect $ "/sleep/" ++ show slTime) st
+                Nothing -> runReaderT (searchRedirect $ "sleep/" ++ show slTime) st
 
 searchRedirect :: FilePath -> ReaderT ExecState Sc.ActionM ()
 searchRedirect redPath = do
@@ -143,10 +144,14 @@ executorWorker = do
     free <- atomically $ readTVar freeVar
     liftIO $ sendMsg unicastSocket multicastAddress $ FreeThreads ownIP free
     delay 1000
+    executorWorker
 
 executorListener :: ReaderT ExecState IO ()
 executorListener = do
     ExecState {..} <- ask
     (FreeThreads ip free, _) <- recvMsg multicastSocket
-    atomically $ modifyTVar othersFreeVar (M.insert ip free)
+    atomically $ do
+        others <- M.insert ip free <$> readTVar othersFreeVar
+        dnsHosts <- M.fromList . map swap . M.toList <$> readTVar dnsHostsVar
+        writeTVar othersFreeVar (M.intersection others dnsHosts)
     executorListener
